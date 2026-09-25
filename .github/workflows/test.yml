@@ -24,4 +24,4 @@ jobs:
       - name: tests-ran guard
         run: python3 -m unittest discover -s tests -p "test_*.py" -v
       - name: commit-message validator
-        run: node --test tests/
+        run: node --test "tests/*.test.cjs"

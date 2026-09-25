@@ -1,4 +1,4 @@
-// Tests for actions/commit-check/check-commit-msg.cjs — run with `node --test tests/`.
+// Tests for actions/commit-check/check-commit-msg.cjs — run with `node --test "tests/*.test.cjs"`.
 // The validator reads the calling repo's .versionrc from the working directory,
 // so each case runs it in a temp directory holding one config flavour.
 const { test } = require("node:test");
