@@ -1,0 +1,16 @@
+# Keeps the actions the shared workflows pin (by SHA) current. Callers pick the
+# new version up through their own github-actions Dependabot entry, which bumps
+# their `uses: Eifi1/shared-workflows/...@<sha>` to the next release tag.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+      timezone: Europe/Zurich
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      actions:
+        patterns: ["*"]

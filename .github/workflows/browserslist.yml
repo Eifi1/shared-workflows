@@ -1,0 +1,84 @@
+name: Browserslist data
+
+# Reusable: refreshes the browser-support data that Vite, Autoprefixer and Babel
+# read through browserslist (caniuse-lite, baseline-browser-mapping) and opens a
+# PR with only the lockfile. One copy for every Eifi1 app; each app calls it
+# from a small scheduled workflow (see README.md).
+#
+# Why a job at all: both packages are transitive, pinned in package-lock.json,
+# so `npm ci` never moves them, and Dependabot has no indirect *version* updates
+# for npm (only security ones). Without this, the data ages and every build
+# warns "caniuse-lite is N months old".
+#
+# `npm update` works within the lockfile's ranges. Nothing unpinned is fetched
+# and run (no `npx update-browserslist-db@latest`) in a job that can write.
+
+on:
+  workflow_call:
+    inputs:
+      directory:
+        description: Folder holding package.json + package-lock.json, relative to the repo root.
+        type: string
+        default: "."
+      node-version-file:
+        description: Node version file, relative to the repo root.
+        type: string
+        default: ".nvmrc"
+    secrets:
+      pr_token:
+        description: >-
+          Optional fine-grained PAT (contents + pull-requests write). A PR opened
+          with the default GITHUB_TOKEN does not trigger CI; one opened with this
+          token does.
+        required: false
+
+jobs:
+  update:
+    name: Update browserslist data
+    runs-on: ubuntu-latest
+    # The caller must grant the same (a called workflow cannot raise them).
+    permissions:
+      contents: write
+      pull-requests: write
+    defaults:
+      run:
+        working-directory: ${{ inputs.directory }}
+    env:
+      LOCKFILE: ${{ inputs.directory == '.' && 'package-lock.json' || format('{0}/package-lock.json', inputs.directory) }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: npm
+          cache-dependency-path: ${{ env.LOCKFILE }}
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+      - name: Update browserslist data
+        run: npm update --ignore-scripts caniuse-lite baseline-browser-mapping
+      # `npm update` moves the hoisted copies. A nested copy pinned by some
+      # package's own range would stay stale, so list them all in the log.
+      - name: Show every copy of the browser data
+        run: npm ls --all caniuse-lite baseline-browser-mapping || true
+      - name: Open pull request
+        # Pinned to a commit: this step holds write permissions.
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          token: ${{ secrets.pr_token || github.token }}
+          branch: chore/browserslist-db
+          delete-branch: true
+          add-paths: ${{ env.LOCKFILE }}
+          commit-message: "build(deps): update browserslist data (caniuse-lite)"
+          title: "build(deps): update browserslist data (caniuse-lite)"
+          body: |
+            Monthly refresh of the browser-support data (`caniuse-lite`,
+            `baseline-browser-mapping`) that the build reads through browserslist.
+            Opened by the shared `Eifi1/shared-workflows` browserslist job.
+
+            Only `${{ env.LOCKFILE }}` changes. If this PR shows no checks, it was
+            opened with the default workflow token, which does not trigger CI:
+            run CI by hand on `chore/browserslist-db`, close and reopen this PR,
+            or set the `BROWSERSLIST_PR_TOKEN` secret so future runs trigger CI.
+
+            If it conflicts with a Dependabot lockfile update that merged first,
+            re-run the "Browserslist data" workflow to rebuild it from main.
