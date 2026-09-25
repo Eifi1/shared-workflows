@@ -93,7 +93,7 @@ jobs:
   release:
     permissions:
       contents: write
-    uses: Eifi1/shared-workflows/.github/workflows/release.yml@<sha> # v1.1.0
+    uses: Eifi1/shared-workflows/.github/workflows/release.yml@<sha> # v1.2.0
     with:
       release-as: ${{ inputs.release-as || 'auto' }}
       dry-run: ${{ inputs.dry-run || false }}
@@ -124,7 +124,7 @@ setup: no extra runner, no extra minutes.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: Eifi1/shared-workflows/actions/commit-check@<sha> # v1.1.0
+      - uses: Eifi1/shared-workflows/actions/commit-check@<sha> # v1.2.0
 ```
 
 Checks every non-merge commit in the push/PR range. The allowed types come
@@ -135,7 +135,7 @@ local commit-msg hook keeps using the repo's own `scripts/check-commit-msg.cjs`.
 ### `actions/python-scans` — pip-audit + vulture
 
 ```yaml
-      - uses: Eifi1/shared-workflows/actions/python-scans@<sha> # v1.1.0
+      - uses: Eifi1/shared-workflows/actions/python-scans@<sha> # v1.2.0
         with:
           working-directory: backend   # omit when pyproject.toml is at the root
           package: myapp               # what vulture scans
@@ -144,13 +144,28 @@ local commit-msg hook keeps using the repo's own `scripts/check-commit-msg.cjs`.
 ### `actions/node-scans` — npm audit + ts-prune
 
 ```yaml
-      - uses: Eifi1/shared-workflows/actions/node-scans@<sha> # v1.1.0
+      - uses: Eifi1/shared-workflows/actions/node-scans@<sha> # v1.2.0
         with:
           working-directory: frontend
 ```
 
 Both scans are advisory (`continue-on-error`) by default; pass
 `advisory: "false"` once a repo's findings are triaged.
+
+### `actions/tests-ran` — a suite must run, not skip
+
+```yaml
+      - name: Tests
+        run: uv run pytest -q --junitxml=junit.xml
+      - uses: Eifi1/shared-workflows/actions/tests-ran@<sha> # v1.2.0
+        with:
+          prefix: tests.integration.   # JUnit classname prefix
+```
+
+Fails when no test under the prefix ran, or when any skipped. For suites that
+skip themselves without their database (RLS, tenant isolation, migrations):
+"12 passed, 40 skipped" is green to pytest and red here. From keksdose's
+`check-integration-ran.py`.
 
 ## Releasing
 

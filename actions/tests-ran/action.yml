@@ -1,0 +1,23 @@
+name: Tests actually ran
+description: >-
+  Fails when no test under a classname prefix ran, or when any of them skipped,
+  read from the JUnit report the caller's pytest step wrote (--junitxml). Guards
+  suites that skip themselves without their database, such as RLS tests.
+
+inputs:
+  report:
+    description: Path to the JUnit XML report, relative to working-directory.
+    default: junit.xml
+  prefix:
+    description: JUnit classname prefix of the suite that must run.
+    default: tests.integration.
+  working-directory:
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Guard — the suite under the prefix must RUN, not skip
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: python3 "$GITHUB_ACTION_PATH/check_tests_ran.py" "${{ inputs.report }}" "${{ inputs.prefix }}"
