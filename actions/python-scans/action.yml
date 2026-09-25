@@ -1,0 +1,34 @@
+name: Python scans
+description: >-
+  Dependency audit (pip-audit) and dead-code scan (vulture) for a uv project.
+  Runs inside the caller's backend job, after setup-uv and `uv sync`.
+
+inputs:
+  working-directory:
+    description: Folder holding pyproject.toml + uv.lock.
+    default: "."
+  package:
+    description: What vulture scans (package directory, relative to working-directory).
+    required: true
+  min-confidence:
+    description: vulture's --min-confidence.
+    default: "80"
+  advisory:
+    description: >-
+      "true" (default) reports findings without failing the job, for repos with
+      pre-existing noise. Set "false" once triaged.
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Security — dependency audit (pip-audit)
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      continue-on-error: ${{ inputs.advisory == 'true' }}
+      run: uv run --with pip-audit pip-audit
+    - name: Dead code — vulture
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      continue-on-error: ${{ inputs.advisory == 'true' }}
+      run: uv run --with vulture vulture "${{ inputs.package }}" --min-confidence "${{ inputs.min-confidence }}"

@@ -1,0 +1,23 @@
+name: Conventional Commits check
+description: >-
+  Checks every non-merge commit in the pushed or PR range against Conventional
+  Commits, with the types taken from the repo's .versionrc.{js,cjs,json}.
+  Runs inside the caller's job: check out with `fetch-depth: 0` first.
+
+inputs:
+  base-sha:
+    description: First commit NOT checked. Empty means only the tip commit.
+    default: ${{ github.event.pull_request.base.sha || github.event.before }}
+  head-sha:
+    description: Last commit checked.
+    default: ${{ github.event.pull_request.head.sha || github.sha }}
+
+runs:
+  using: composite
+  steps:
+    - name: Commit messages — Conventional Commits
+      shell: bash
+      env:
+        BASE_SHA: ${{ inputs.base-sha }}
+        HEAD_SHA: ${{ inputs.head-sha }}
+      run: node "$GITHUB_ACTION_PATH/check-commit-range.cjs"

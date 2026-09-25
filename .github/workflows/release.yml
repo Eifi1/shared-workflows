@@ -1,0 +1,154 @@
+name: Release
+
+# Reusable: semver release driven by Conventional Commits. commit-and-tag-version
+# derives the next version from the commit history (or an explicit bump),
+# rewrites the files in the repo's .versionrc bumpFiles, updates CHANGELOG.md,
+# commits and tags. This job then pushes the pair atomically and opens a GitHub
+# release with that version's changelog section as notes.
+#
+# Keksdose's hardened release, shared so every app gets its two fixes:
+#   - stray tags left by a half-pushed release are deleted before cutting (an
+#     orphan otherwise blocks every later release until removed by hand);
+#   - the push is `--atomic` and, if main moved underneath, the release is re-cut
+#     on the new main (up to 3 attempts) instead of leaving a tag on no branch.
+#
+# The caller owns the triggers (push to main + workflow_dispatch with
+# release-as / dry-run), `permissions: contents: write` and the concurrency
+# group. See README.md for the caller.
+
+on:
+  workflow_call:
+    inputs:
+      release-as:
+        description: auto | patch | minor | major
+        type: string
+        default: auto
+      dry-run:
+        description: Preview only — no commit, tag, or push.
+        type: boolean
+        default: false
+      install-directory:
+        description: Folder whose package-lock.json provides commit-and-tag-version.
+        type: string
+        default: "."
+      cli:
+        description: How to invoke commit-and-tag-version from the repo root.
+        type: string
+        default: npx commit-and-tag-version
+      version-file:
+        description: package.json the released version is read from, relative to the repo root.
+        type: string
+        default: package.json
+      pre-release-check:
+        description: Command run before cutting (e.g. a version-sync check). Empty to skip.
+        type: string
+        default: node scripts/check-version-sync.cjs
+      node-version-file:
+        type: string
+        default: .nvmrc
+
+jobs:
+  release:
+    # Always require main, and on push events skip the workflow's own release
+    # commit so we don't loop forever each time it pushes `chore(release): …`.
+    if: |
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' ||
+       !startsWith(github.event.head_commit.message, 'chore(release):'))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      LOCKFILE: ${{ inputs.install-directory == '.' && 'package-lock.json' || format('{0}/package-lock.json', inputs.install-directory) }}
+      REMOTE: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0 # full history so the changelog + version can be computed
+          # Leave `origin` without stored auth; the pushes below use $REMOTE.
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version-file: ${{ inputs.node-version-file }}
+          cache: npm
+          cache-dependency-path: ${{ env.LOCKFILE }}
+      - name: Install release tooling
+        working-directory: ${{ inputs.install-directory }}
+        run: npm ci --ignore-scripts # only the CLI is needed, not postinstalls or hooks
+      - name: Pre-release check
+        if: inputs.pre-release-check != ''
+        run: ${{ inputs.pre-release-check }}
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+      - name: Clear stray tags from a half-pushed release
+        # `fetch-depth: 0` fetches all tags, so an orphaned `vX.Y.Z` on the remote is
+        # a LOCAL tag by now, and commit-and-tag-version's plain `git tag -a` would die
+        # with "tag already exists" before the push step's retry is ever reached.
+        #
+        # Stray = a `v*` tag whose commit is on NO remote branch: the signature of a
+        # half-pushed release (tag landed, branch update rejected). A real release tag
+        # is on main and never touched. A tag that IS on a branch and still collides is
+        # a different problem (the version was already cut) and fails loudly below.
+        run: |
+          git fetch --quiet --force "$REMOTE" "+refs/heads/*:refs/remotes/release-probe/*"
+          stray=0
+          for tag in $(git tag -l 'v*'); do
+            commit="$(git rev-parse -q --verify "$tag^{commit}")" || continue
+            if [ -n "$(git for-each-ref --contains "$commit" refs/remotes/release-probe/)" ]; then
+              continue
+            fi
+            stray=$((stray + 1))
+            echo "::warning::$tag points at $(git rev-parse --short "$commit"), which is on no" \
+                 "branch — debris from a half-pushed release. Deleting it so the version can be cut."
+            git tag -d "$tag"
+            git push --quiet "$REMOTE" ":refs/tags/$tag" || true
+          done
+          [ "$stray" -eq 0 ] && echo "No stray tags; every v* tag is on a branch."
+          git for-each-ref --format='%(refname)' refs/remotes/release-probe/ \
+            | while read -r ref; do git update-ref -d "$ref"; done
+      - name: Release (commit-and-tag-version)
+        run: |
+          ARGS="--tag-prefix v"
+          [ "${{ inputs.release-as }}" != "auto" ] && ARGS="$ARGS --release-as ${{ inputs.release-as }}"
+          [ "${{ inputs.dry-run }}" = "true" ] && ARGS="$ARGS --dry-run"
+          echo "commit-and-tag-version $ARGS"
+          # Kept for the push step, which re-runs this exact command if main moved.
+          echo "RELEASE_ARGS=$ARGS" >> "$GITHUB_ENV"
+          ${{ inputs.cli }} $ARGS
+      - name: Push commit and tag
+        if: ${{ !inputs.dry-run }}
+        # A plain `git push --follow-tags` is not atomic: the tag can land while the
+        # branch is rejected (main moved, e.g. a badge commit), leaving a tag on no
+        # branch. `--atomic` makes the pair all-or-nothing; on rejection the release is
+        # re-cut on the new main so the CHANGELOG matches what is actually there.
+        run: |
+          for attempt in 1 2 3; do
+            if git push --atomic --follow-tags "$REMOTE" HEAD:main; then
+              exit 0
+            fi
+            VERSION="v$(node -p "require('./${{ inputs.version-file }}').version")"
+            echo "::warning::main moved under the release; re-cutting $VERSION (attempt $attempt)"
+            git tag -d "$VERSION" || true
+            git fetch "$REMOTE" main
+            git reset --hard FETCH_HEAD
+            ${{ inputs.cli }} $RELEASE_ARGS
+          done
+          echo "::error::the release could not be pushed after 3 attempts"
+          exit 1
+      - name: Create GitHub release
+        if: ${{ !inputs.dry-run }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="v$(node -p "require('./${{ inputs.version-file }}').version")"
+          # This release's grouped sections from CHANGELOG.md, rather than
+          # --generate-notes (one line per PR title).
+          NOTES=$(awk 'BEGIN{p=0} /^## /{p++; if(p==2) exit} p==1' CHANGELOG.md)
+          if [ -z "$NOTES" ]; then
+            echo "WARN: empty changelog section for $VERSION, falling back to --generate-notes"
+            gh release create "$VERSION" --title "$VERSION" --generate-notes --verify-tag
+          else
+            gh release create "$VERSION" --title "$VERSION" --notes "$NOTES" --verify-tag
+          fi

@@ -1,0 +1,32 @@
+name: Node scans
+description: >-
+  Dependency audit (npm audit) and dead-code scan (ts-prune) for an npm project.
+  Runs inside the caller's frontend job, after `npm ci`.
+
+inputs:
+  working-directory:
+    description: Folder holding package.json + package-lock.json.
+    default: "."
+  audit-level:
+    description: npm audit --audit-level.
+    default: high
+  advisory:
+    description: >-
+      "true" (default) reports findings without failing the job, for repos with
+      pre-existing noise. Set "false" once triaged.
+    default: "true"
+
+runs:
+  using: composite
+  steps:
+    - name: Security — npm audit
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      continue-on-error: ${{ inputs.advisory == 'true' }}
+      run: npm audit --audit-level="${{ inputs.audit-level }}"
+    - name: Dead code — ts-prune
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      continue-on-error: ${{ inputs.advisory == 'true' }}
+      # Pinned: an unpinned `npx --yes` runs whatever the registry serves today.
+      run: npx --yes ts-prune@0.10.3
