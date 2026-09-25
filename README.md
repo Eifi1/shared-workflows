@@ -61,6 +61,12 @@ This repo is private. Its workflows are callable by the other Eifi1 repos
 because Settings → Actions → General → **Access** is set to "Accessible from
 repositories owned by the user 'Eifi1'".
 
+That covers **private** repos only. GitHub never lets a **public** repository
+use actions or reusable workflows from a private one, whatever the access
+setting says (the run fails with "Unable to resolve action … not found").
+ui-kit is public and therefore keeps local copies. Making this repo public
+(it holds only generic scripts, no secrets) would lift that.
+
 ## `release.yml` — semver release (reusable workflow)
 
 commit-and-tag-version release with keksdose's hardening: stray tags from a
