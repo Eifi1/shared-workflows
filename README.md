@@ -57,15 +57,16 @@ CI — run CI by hand (`workflow_dispatch` on the app's CI) or close and reopen.
 
 ### Repository setting (this repo)
 
-This repo is private. Its workflows are callable by the other Eifi1 repos
-because Settings → Actions → General → **Access** is set to "Accessible from
-repositories owned by the user 'Eifi1'".
+This repo is **public** (since 2026-09-29). It holds only generic scripts and
+workflows, no secrets, and being public is what lets every Eifi1 repo use it
+without further setup:
 
-That covers **private** repos only. GitHub never lets a **public** repository
-use actions or reusable workflows from a private one, whatever the access
-setting says (the run fails with "Unable to resolve action … not found").
-ui-kit is public and therefore keeps local copies. Making this repo public
-(it holds only generic scripts, no secrets) would lift that.
+- any repository, private or public, can call its reusable workflows and
+  composite actions — ui-kit, which is public, could not while this was private;
+- Dependabot's github-actions updater in each app can read it to move the
+  pinned SHA. While it was private it failed with "Repository not found", since
+  a personal account has no setting that grants Dependabot access to another
+  private repository. No `registries:` block or token is needed.
 
 ## `release.yml` — semver release (reusable workflow)
 
