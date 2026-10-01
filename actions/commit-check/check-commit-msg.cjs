@@ -6,8 +6,8 @@
  * so a commit that passes here is one its release tool can categorise. The
  * config is looked up in the working directory (the repo root), in whichever
  * flavour the repo uses: .versionrc.js (kastlan), .versionrc.cjs (ui-kit, an
- * ESM package), .versionrc.json (keksdose). A repo with no config (lenkbank)
- * gets the standard Conventional Commits types.
+ * ESM package), .versionrc.json (keksdose, kurvenschmiede). A repo with no
+ * config gets the standard Conventional Commits types.
  *
  * Dependency-free on purpose (no commitlint), so it runs without an install.
  */

@@ -25,7 +25,7 @@ function check(message, files = {}) {
 
 const ONLY_FEAT = { types: [{ type: "feat" }] };
 
-test("standard types apply without a config (lenkbank)", () => {
+test("standard types apply without a config", () => {
   assert.equal(check("fix(api): handle empty body"), true);
   assert.equal(check("nonsense"), false);
 });

@@ -1,7 +1,7 @@
 # shared-workflows
 
 Reusable GitHub Actions workflows and composite actions shared by the Eifi1 apps (kastlan, keksdose,
-lenkbank, …). One copy of each job lives here; every app calls it from a
+kurvenschmiede, …). One copy of each job lives here; every app calls it from a
 small workflow of its own, which carries only what is genuinely per-app: the
 schedule, the folder, and the permissions.
 

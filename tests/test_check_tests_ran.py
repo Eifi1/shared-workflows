@@ -70,7 +70,7 @@ class CheckTestsRan(unittest.TestCase):
         self.assertEqual(guard.main(report, PREFIX), 1)
 
     def test_the_prefix_is_configurable(self):
-        """lenkbank guards its whole suite with prefix 'tests.'."""
+        """kurvenschmiede guards its whole suite with prefix 'tests.'."""
         report = self._report(_case("tests.unit.test_money", "test_rounding", skipped=True))
         self.assertEqual(guard.main(report, "tests."), 1)
         self.assertEqual(guard.main(report, PREFIX), 1)  # nothing under integration
