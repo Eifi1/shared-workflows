@@ -104,3 +104,41 @@ test("the top-level .versionrc.cjs applies when required as a module from a subd
     fs.rmSync(root, { recursive: true, force: true });
   }
 });
+
+// A hook that exports a GIT_DIR and then cds into a subdirectory (git runs hooks with GIT_DIR
+// set; a relative one stops resolving after the cd, and any GIT_DIR without GIT_WORK_TREE makes
+// git treat the working directory as the top level). The top-level config still applies, and a
+// GIT_DIR that leads nowhere warns instead of silently using the standard types (round-047 N5).
+function checkWithGitDir(message, gitDir, { repo = true } = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "commit-check-gitdir-"));
+  const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith("GIT_")));
+  if (repo) execFileSync("git", ["init", "-q"], { cwd: root, stdio: "pipe", env });
+  fs.writeFileSync(path.join(root, ".versionrc.json"), JSON.stringify(ONLY_FEAT));
+  const cwd = path.join(root, "frontend");
+  fs.mkdirSync(cwd);
+  const value = gitDir === "absolute" ? path.join(root, ".git") : gitDir;
+  try {
+    execFileSync("node", [SCRIPT, message], { cwd, stdio: "pipe", env: { ...env, GIT_DIR: value } });
+    return { ok: true, stderr: "" };
+  } catch (error) {
+    return { ok: false, stderr: String(error.stderr) };
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test("a relative GIT_DIR exported before a cd into a subdirectory still finds the top-level config", () => {
+  assert.equal(checkWithGitDir("feat: x", ".git").ok, true);
+  assert.equal(checkWithGitDir("fix: x", ".git").ok, false);
+});
+
+test("an absolute GIT_DIR from a subdirectory still finds the top-level config", () => {
+  assert.equal(checkWithGitDir("feat: x", "absolute").ok, true);
+  assert.equal(checkWithGitDir("fix: x", "absolute").ok, false);
+});
+
+test("a GIT_DIR that resolves nowhere warns before falling back to the working directory", () => {
+  const result = checkWithGitDir("nonsense", ".git", { repo: false });
+  assert.equal(result.ok, false);
+  assert.match(result.stderr, /GIT_DIR=\.git/);
+});

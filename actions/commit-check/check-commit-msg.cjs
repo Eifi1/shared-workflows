@@ -22,16 +22,43 @@ const DEFAULT_TYPES = [
   "docs", "style", "chore", "test", "build", "ci",
 ];
 
-/** The repo's root: git's top level, or the working directory outside a repo. */
-function configDir() {
+/** `git rev-parse --show-toplevel` under `env`, or null when git fails or prints nothing. */
+function gitTopLevel(env) {
   try {
     const top = execFileSync("git", ["rev-parse", "--show-toplevel"], {
       encoding: "utf8",
+      env,
       stdio: ["ignore", "pipe", "ignore"],
     }).trim();
-    if (top) return top;
+    return top || null;
   } catch {
-    /* not a repo, or no git: the working directory */
+    return null; /* not a repo, or no git */
+  }
+}
+
+/**
+ * The repo's root: git's top level, or the working directory outside a repo.
+ *
+ * git runs hooks with GIT_DIR exported. After a hook cds into a subdirectory a relative GIT_DIR
+ * no longer resolves, and any GIT_DIR without GIT_WORK_TREE makes git report the working
+ * directory as the top level, so with GIT_DIR set (and no GIT_WORK_TREE) the top level is first
+ * discovered from the working directory with both unset. A GIT_DIR that leads nowhere warns
+ * before the working-directory fallback instead of silently using the standard types.
+ */
+function configDir() {
+  const env = process.env;
+  if (env.GIT_DIR && !env.GIT_WORK_TREE) {
+    const { GIT_DIR: _dir, GIT_WORK_TREE: _tree, ...discover } = env;
+    const discovered = gitTopLevel(discover);
+    if (discovered) return discovered;
+  }
+  const top = gitTopLevel(env);
+  if (top) return top;
+  if (env.GIT_DIR) {
+    console.error(
+      `commit-check: GIT_DIR=${env.GIT_DIR} does not resolve from ${process.cwd()}; ` +
+        "reading the commit types from the working directory",
+    );
   }
   return process.cwd();
 }
