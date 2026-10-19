@@ -179,12 +179,32 @@ test("merge commits are skipped; the repo's .versionrc types apply", () => {
   }
 });
 
-test("a remote sha this clone doesn't have falls back to the tip", () => {
+test("a remote sha this clone doesn't have: everything not on the default branch is checked", () => {
   const r = repo();
   try {
-    r.commit("not conventional");
+    r.commit("old history, not conventional");
+    r.git("push", "-q", "origin", "main");
+    r.git("fetch", "-q", "origin");
+    const good = r.commit("feat: new work");
+    assert.equal(r.run(line(good, "1".repeat(40))).status, 0);
+    r.commit("an earlier bad one, unfetched range");
     const tip = r.commit("feat: tip");
-    assert.equal(r.run(line(tip, "1".repeat(40))).status, 0);
+    const res = r.run(line(tip, "1".repeat(40)));
+    assert.equal(res.status, 1);
+    assert.match(res.stderr, /an earlier bad one/);
+    assert.doesNotMatch(res.stderr, /old history/);
+  } finally {
+    r.cleanup();
+  }
+});
+
+test("a remote sha this clone doesn't have and no default branch known: fails closed, asks for a fetch", () => {
+  const r = repo();
+  try {
+    const tip = r.commit("feat: tip");
+    const res = r.run(line(tip, "1".repeat(40)));
+    assert.equal(res.status, 1);
+    assert.match(res.stderr, /git fetch/);
   } finally {
     r.cleanup();
   }

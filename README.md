@@ -162,7 +162,9 @@ Each stdin line is `<local ref> <local sha> <remote ref> <remote sha>`. The
 range is `<remote sha>..<local sha>`; for a branch the remote doesn't have yet,
 everything not on the remote's default branch: `<remote>/HEAD`, else
 `<remote>/main`, else `<remote>/master`, else only the tip. A deletion checks
-nothing; a remote sha this clone hasn't fetched checks the tip. The argument is
+nothing; a remote sha this clone hasn't fetched checks everything not on the
+default branch, and fails closed (asking for a `git fetch`) when no default
+branch is known. The argument is
 the remote (git's `$1`), default `origin`. Exit 1 lists the offending commits.
 Run from the repo root, so the repo's `.versionrc` types apply.
 
