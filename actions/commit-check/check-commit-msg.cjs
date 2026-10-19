@@ -4,8 +4,10 @@
  *
  * The allowed types come from the CALLING repo's commit-and-tag-version config,
  * so a commit that passes here is one its release tool can categorise. The
- * config is looked up in the working directory (the repo root), in whichever
- * flavour the repo uses: .versionrc.js (kastlan), .versionrc.cjs (ui-kit, an
+ * config is looked up at the git top level (`git rev-parse --show-toplevel`,
+ * so a hook or script started in a subdirectory still finds it; outside a
+ * repo, or without git, the working directory), in whichever flavour the
+ * repo uses: .versionrc.js (kastlan), .versionrc.cjs (ui-kit, an
  * ESM package), .versionrc.json (keksdose, kurvenschmiede). A repo with no
  * config gets the standard Conventional Commits types.
  *
@@ -13,13 +15,28 @@
  */
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 
 const DEFAULT_TYPES = [
   "feat", "fix", "perf", "refactor", "revert",
   "docs", "style", "chore", "test", "build", "ci",
 ];
 
-function loadTypes(dir = process.cwd()) {
+/** The repo's root: git's top level, or the working directory outside a repo. */
+function configDir() {
+  try {
+    const top = execFileSync("git", ["rev-parse", "--show-toplevel"], {
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    }).trim();
+    if (top) return top;
+  } catch {
+    /* not a repo, or no git: the working directory */
+  }
+  return process.cwd();
+}
+
+function loadTypes(dir = configDir()) {
   for (const name of [".versionrc.js", ".versionrc.cjs"]) {
     const file = path.join(dir, name);
     if (fs.existsSync(file)) return { types: require(file).types, source: name };
