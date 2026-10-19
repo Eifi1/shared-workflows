@@ -139,6 +139,35 @@ from the repo's `.versionrc.js`, `.versionrc.cjs` or `.versionrc.json`, so they
 match the release tool; a repo without one gets the standard types. The
 local commit-msg hook keeps using the repo's own `scripts/check-commit-msg.cjs`.
 
+#### Locally, before the push: `check-pushed-commits.cjs` (v1.3.0)
+
+The commit-msg hook is skipped by `git commit --no-verify` and by every rewrite
+that doesn't re-run hooks, so a bad header can still reach CI. The pre-push
+check catches it on the machine: every non-merge commit the push would send
+must pass `check-commit-msg.cjs`. Generalised from keksdose's copy.
+
+Vendor both files into the app's `scripts/` (byte for byte, pinned to a tag
+like ui-kit's `scripts/shared-commit-rules.json`; `check-pushed-commits.cjs`
+requires `./check-commit-msg.cjs` beside it, nothing else), then pipe git's
+pre-push stdin to it:
+
+```sh
+#!/bin/sh
+# .githooks/pre-push or .husky/pre-push. Read stdin once if the hook has other checks too.
+input=$(cat)
+printf '%s\n' "$input" | node scripts/check-pushed-commits.cjs "${1:-origin}" || exit 1
+```
+
+Each stdin line is `<local ref> <local sha> <remote ref> <remote sha>`. The
+range is `<remote sha>..<local sha>`; for a branch the remote doesn't have yet,
+everything not on the remote's default branch: `<remote>/HEAD`, else
+`<remote>/main`, else `<remote>/master`, else only the tip. A deletion checks
+nothing; a remote sha this clone hasn't fetched checks everything not on the
+default branch, and fails closed (asking for a `git fetch`) when no default
+branch is known. The argument is
+the remote (git's `$1`), default `origin`. Exit 1 lists the offending commits.
+Run from the repo root, so the repo's `.versionrc` types apply.
+
 ### `actions/python-scans` — pip-audit + vulture
 
 ```yaml
@@ -178,3 +207,11 @@ skip themselves without their database (RLS, tenant isolation, migrations):
 
 Tag a release (`v1.0.1`, …) after a change; callers move to it through their
 Dependabot github-actions updates. A breaking input change is a new major.
+
+### v1.3.0 (not tagged yet)
+
+- `actions/commit-check/check-pushed-commits.cjs`: the pre-push check of the
+  commit messages a push sends (from keksdose's copy; the default branch from
+  `<remote>/HEAD` instead of a hard-coded `origin/main`; the remote as an
+  argument; a root commit and an unfetched remote sha no longer throw). Tests in
+  `tests/check-pushed-commits.test.cjs`. The action itself is unchanged.
