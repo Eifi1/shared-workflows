@@ -48,7 +48,10 @@ function gitTopLevel(env) {
 function configDir() {
   const env = process.env;
   if (env.GIT_DIR && !env.GIT_WORK_TREE) {
-    const { GIT_DIR: _dir, GIT_WORK_TREE: _tree, ...discover } = env;
+    // Discover from the working directory: the same environment without the two git paths.
+    const discover = { ...env };
+    delete discover.GIT_DIR;
+    delete discover.GIT_WORK_TREE;
     const discovered = gitTopLevel(discover);
     if (discovered) return discovered;
   }
