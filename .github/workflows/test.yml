@@ -23,5 +23,5 @@ jobs:
           node-version: 24
       - name: tests-ran guard
         run: python3 -m unittest discover -s tests -p "test_*.py" -v
-      - name: commit-message validator
+      - name: commit-message validator + pre-push check
         run: node --test "tests/*.test.cjs"
