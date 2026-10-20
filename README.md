@@ -166,7 +166,28 @@ nothing; a remote sha this clone hasn't fetched checks everything not on the
 default branch, and fails closed (asking for a `git fetch`) when no default
 branch is known. The argument is
 the remote (git's `$1`), default `origin`. Exit 1 lists the offending commits.
-Run from the repo root, so the repo's `.versionrc` types apply.
+The `.versionrc` is found at the git top level (v1.3.1), so the repo's types
+apply from any directory; outside a repo the working directory is used.
+
+#### Hook it once: commit-msg, pre-push or CI
+
+Each place catches what the one before it lets through, so run each check in
+one place only:
+
+- **commit-msg** (`check-commit-msg.cjs "$1"`): the message as it is written.
+  Skipped by `--no-verify` and by rewrites that don't re-run hooks.
+- **pre-push** (`check-pushed-commits.cjs`): exactly the commits this push
+  sends, on any branch, rewritten ones included. The last local moment.
+- **CI** (this action, `check-commit-range.cjs`): the whole PR range; the gate
+  nobody can skip.
+
+A repo script that already runs `check-commit-range.cjs` against `main` (e.g. a
+`check:versioning` step called from the pre-push hook) overlaps with
+`check-pushed-commits.cjs`: both read the same rules, so a bad header fails
+twice. That is harmless, not wrong. To keep one, keep `check-pushed-commits.cjs`
+in the hook (it also covers pushes of other branches and rewritten commits, and
+needs no `main` locally) and leave the range check to CI. If both stay, read
+git's stdin once, first, and pipe it to the pushed-commits check.
 
 ### `actions/python-scans` — pip-audit + vulture
 
@@ -208,7 +229,16 @@ skip themselves without their database (RLS, tenant isolation, migrations):
 Tag a release (`v1.0.1`, …) after a change; callers move to it through their
 Dependabot github-actions updates. A breaking input change is a new major.
 
-### v1.3.0 (not tagged yet)
+### v1.3.1 (not tagged yet)
+
+- `actions/commit-check/check-commit-msg.cjs`: the `.versionrc.{js,cjs,json}`
+  is looked up at `git rev-parse --show-toplevel`, falling back to the working
+  directory outside a repo (was: the working directory only, so a run from a
+  subdirectory silently used the default types; keksdose N5). Still
+  dependency-free; `validate()` and `TYPES` unchanged. Tests in
+  `tests/check-commit-msg.test.cjs`. README: where to hook the commit checks.
+
+### v1.3.0
 
 - `actions/commit-check/check-pushed-commits.cjs`: the pre-push check of the
   commit messages a push sends (from keksdose's copy; the default branch from
